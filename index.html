@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CloudVPS Control Center</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-slate-950 text-slate-100 min-h-screen font-sans antialiased p-4 md:p-8">
+  <div class="max-w-4xl mx-auto space-y-6">
+    
+    <!-- Header -->
+    <header class="flex justify-between items-center border-b border-slate-800 pb-4">
+      <div>
+        <h1 class="text-2xl font-bold tracking-tight text-white flex items-center gap-2">
+          ⚡ CloudVPS Manager
+        </h1>
+        <p class="text-xs text-slate-400">Zero-Cost Scalable Infrastructure Engine</p>
+      </div>
+      <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+        <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+        API Online
+      </span>
+    </header>
+
+    <!-- Create VPS Card -->
+    <div class="bg-slate-900 border border-slate-800 rounded-xl p-6 shadow-xl">
+      <h2 class="text-lg font-semibold text-slate-200 mb-4">Deploy New Server</h2>
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div>
+          <label class="block text-xs font-medium text-slate-400 mb-1">Server Hostname</label>
+          <input type="text" id="srvName" placeholder="e.g. node-master-01" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-100 focus:outline-none focus:border-indigo-500">
+        </div>
+        <div>
+          <label class="block text-xs font-medium text-slate-400 mb-1">Operating System</label>
+          <select id="srvOs" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-100 focus:outline-none focus:border-indigo-500">
+            <option value="Ubuntu 24.04 LTS">Ubuntu 24.04 LTS</option>
+            <option value="Debian 12 Bookworm">Debian 12 Bookworm</option>
+            <option value="Alpine Linux 3.20">Alpine Linux 3.20</option>
+          </select>
+        </div>
+        <div class="flex items-end">
+          <button onclick="deployVPS()" id="btnDeploy" class="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-medium py-2 px-4 rounded-lg text-sm transition-all duration-150 flex items-center justify-center gap-2">
+            🚀 Launch Instance
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Active Servers List -->
+    <div class="bg-slate-900 border border-slate-800 rounded-xl p-6 shadow-xl">
+      <div class="flex justify-between items-center mb-4">
+        <h2 class="text-lg font-semibold text-slate-200">Provisioned Instances</h2>
+        <button onclick="loadServers()" class="text-xs text-indigo-400 hover:text-indigo-300">Refresh List</button>
+      </div>
+      <div class="overflow-x-auto">
+        <table class="w-full text-left text-sm text-slate-300">
+          <thead class="bg-slate-950/60 text-xs uppercase text-slate-400 border-b border-slate-800">
+            <tr>
+              <th class="px-4 py-3">Server</th>
+              <th class="px-4 py-3">IP Address</th>
+              <th class="px-4 py-3">OS</th>
+              <th class="px-4 py-3">Status</th>
+              <th class="px-4 py-3">Access Command</th>
+            </tr>
+          </thead>
+          <tbody id="serverList" class="divide-y divide-slate-800">
+            <tr><td colspan="5" class="px-4 py-4 text-center text-slate-500">Loading instances...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+  </div>
+
+  <script>
+    // Connected to your live Render Backend
+    const API_BASE = "https://vps-engine.onrender.com"; 
+
+    async function loadServers() {
+      const tbody = document.getElementById('serverList');
+      try {
+        const res = await fetch(`${API_BASE}/api/servers`);
+        const data = await res.json();
+        if (!data.servers || data.servers.length === 0) {
+          tbody.innerHTML = '<tr><td colspan="5" class="px-4 py-4 text-center text-slate-500">No active servers yet. Deploy one above!</td></tr>';
+          return;
+        }
+        tbody.innerHTML = data.servers.map(s => `
+          <tr class="hover:bg-slate-800/40">
+            <td class="px-4 py-3 font-semibold text-white">${s.name}</td>
+            <td class="px-4 py-3 text-emerald-400 font-mono">${s.ip_address}</td>
+            <td class="px-4 py-3 text-slate-400">${s.os_name}</td>
+            <td class="px-4 py-3"><span class="px-2 py-0.5 rounded text-xs bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">${s.status}</span></td>
+            <td class="px-4 py-3 font-mono text-xs text-slate-300 bg-slate-950/40 rounded px-2 py-1 select-all">ssh root@${s.ip_address}</td>
+          </tr>
+        `).join('');
+      } catch (err) {
+        tbody.innerHTML = `<tr><td colspan="5" class="px-4 py-4 text-center text-rose-400">Failed to load servers: ${err.message}</td></tr>`;
+      }
+    }
+
+    async function deployVPS() {
+      const name = document.getElementById('srvName').value || 'srv-' + Math.floor(Math.random() * 1000);
+      const os = document.getElementById('srvOs').value;
+      const btn = document.getElementById('btnDeploy');
+      btn.disabled = true;
+      btn.innerText = "Provisioning...";
+
+      try {
+        const res = await fetch(`${API_BASE}/api/create-vps`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name, os })
+        });
+        const result = await res.json();
+        alert(`Server ${result.server.name} Deployed!\nIP: ${result.server.ip}\nPassword: ${result.server.root_password}`);
+        document.getElementById('srvName').value = '';
+        loadServers();
+      } catch (e) {
+        alert("Provisioning failed: " + e.message);
+      } finally {
+        btn.disabled = false;
+        btn.innerText = "🚀 Launch Instance";
+      }
+    }
+
+    loadServers();
+  </script>
+</body>
+</html>
+
