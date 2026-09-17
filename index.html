@@ -17,7 +17,7 @@
         </h1>
         <p class="text-xs text-slate-400">Scalable High-Performance Cloud Engine</p>
       </div>
-      <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+      <span id="apiStatus" class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
         <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
         API Online
       </span>
@@ -40,7 +40,7 @@
           </select>
         </div>
         <div class="flex items-end">
-          <button onclick="deployVPS()" id="btnDeploy" class="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-medium py-2 px-4 rounded-lg text-sm transition-all duration-150 flex items-center justify-center gap-2 shadow-lg shadow-indigo-600/30">
+          <button type="button" onclick="deployVPS()" id="btnDeploy" class="w-full cursor-pointer bg-indigo-600 hover:bg-indigo-500 active:bg-indigo-700 text-white font-medium py-2 px-4 rounded-lg text-sm transition-all duration-150 flex items-center justify-center gap-2 shadow-lg shadow-indigo-600/30">
             🚀 Launch Instance
           </button>
         </div>
@@ -51,7 +51,7 @@
     <div class="bg-slate-900 border border-slate-800 rounded-xl p-6 shadow-xl">
       <div class="flex justify-between items-center mb-4">
         <h2 class="text-lg font-semibold text-slate-200">Provisioned Instances</h2>
-        <button onclick="loadServers()" class="text-xs text-indigo-400 hover:text-indigo-300 font-medium">⟳ Refresh List</button>
+        <button type="button" onclick="loadServers()" class="text-xs text-indigo-400 hover:text-indigo-300 font-medium cursor-pointer">⟳ Refresh List</button>
       </div>
       <div class="overflow-x-auto">
         <table class="w-full text-left text-sm text-slate-300">
@@ -76,10 +76,12 @@
   <script>
     const API_BASE = "https://vps-engine.onrender.com"; 
 
-    // Fake CPU/RAM generator based on ID for consistent UI metrics
-    function getMetrics(id) {
-      const cpu = ((id * 17) % 65) + 12;
-      const ram = ((id * 23) % 55) + 20;
+    function getMetrics(key) {
+      let hash = 0;
+      const str = String(key);
+      for (let i = 0; i < str.length; i++) hash = (hash * 31 + str.charCodeAt(i)) % 1000;
+      const cpu = (hash % 60) + 15;
+      const ram = ((hash * 7) % 50) + 25;
       return { cpu, ram };
     }
 
@@ -94,13 +96,14 @@
         }
 
         tbody.innerHTML = data.servers.map(s => {
+          const sId = String(s.id);
           const isRunning = s.status === 'running';
-          const { cpu, ram } = isRunning ? getMetrics(s.id) : { cpu: 0, ram: 0 };
+          const { cpu, ram } = isRunning ? getMetrics(sId) : { cpu: 0, ram: 0 };
           return `
           <tr class="hover:bg-slate-800/40 transition-colors">
             <td class="px-4 py-4">
               <div class="font-semibold text-white">${s.name}</div>
-              <div class="text-xs text-slate-400">${s.os_name}</div>
+              <div class="text-xs text-slate-400">${s.os_name || 'Ubuntu 24.04'}</div>
             </td>
             <td class="px-4 py-4 font-mono text-emerald-400 text-xs select-all">${s.ip_address}</td>
             <td class="px-4 py-4">
@@ -128,10 +131,10 @@
               </div>
             </td>
             <td class="px-4 py-4 text-right space-x-2">
-              <button onclick="toggleServer(${s.id})" class="text-xs px-2.5 py-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700">
+              <button type="button" onclick="toggleServer('${sId}')" class="cursor-pointer text-xs px-3 py-1.5 rounded bg-slate-800 hover:bg-slate-700 active:bg-slate-600 text-slate-200 border border-slate-700 transition">
                 ${isRunning ? 'Stop' : 'Start'}
               </button>
-              <button onclick="deleteServer(${s.id})" class="text-xs px-2.5 py-1 rounded bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/20">
+              <button type="button" onclick="deleteServer('${sId}')" class="cursor-pointer text-xs px-3 py-1.5 rounded bg-rose-500/20 hover:bg-rose-500/30 active:bg-rose-500/40 text-rose-300 border border-rose-500/30 transition">
                 Terminate
               </button>
             </td>
@@ -144,7 +147,7 @@
     }
 
     async function deployVPS() {
-      const name = document.getElementById('srvName').value || 'srv-' + Math.floor(Math.random() * 1000);
+      const name = document.getElementById('srvName').value.trim() || 'srv-' + Math.floor(Math.random() * 1000);
       const os = document.getElementById('srvOs').value;
       const btn = document.getElementById('btnDeploy');
       btn.disabled = true;
@@ -159,7 +162,7 @@
         const result = await res.json();
         alert(`Server ${result.server.name} Deployed!\nIP: ${result.server.ip}\nPassword: ${result.server.root_password}`);
         document.getElementById('srvName').value = '';
-        loadServers();
+        await loadServers();
       } catch (e) {
         alert("Provisioning failed: " + e.message);
       } finally {
@@ -170,8 +173,9 @@
 
     async function toggleServer(id) {
       try {
-        await fetch(`${API_BASE}/api/servers/${id}/toggle`, { method: 'POST' });
-        loadServers();
+        const res = await fetch(`${API_BASE}/api/servers/${id}/toggle`, { method: 'POST' });
+        if (!res.ok) throw new Error("HTTP error " + res.status);
+        await loadServers();
       } catch (e) {
         alert("Action failed: " + e.message);
       }
@@ -180,14 +184,15 @@
     async function deleteServer(id) {
       if (!confirm("Are you sure you want to terminate this server?")) return;
       try {
-        await fetch(`${API_BASE}/api/servers/${id}`, { method: 'DELETE' });
-        loadServers();
+        const res = await fetch(`${API_BASE}/api/servers/${id}`, { method: 'DELETE' });
+        if (!res.ok) throw new Error("HTTP error " + res.status);
+        await loadServers();
       } catch (e) {
         alert("Delete failed: " + e.message);
       }
     }
 
-    loadServers();
+    window.onload = loadServers;
   </script>
 </body>
 </html>
