@@ -7,7 +7,7 @@
   <script src="https://cdn.tailwindcss.com"></script>
 </head>
 <body class="bg-slate-950 text-slate-100 min-h-screen font-sans antialiased p-4 md:p-8">
-  <div class="max-w-4xl mx-auto space-y-6">
+  <div class="max-w-5xl mx-auto space-y-6">
     
     <!-- Header -->
     <header class="flex justify-between items-center border-b border-slate-800 pb-4">
@@ -15,7 +15,7 @@
         <h1 class="text-2xl font-bold tracking-tight text-white flex items-center gap-2">
           ⚡ CloudVPS Manager
         </h1>
-        <p class="text-xs text-slate-400">Zero-Cost Scalable Infrastructure Engine</p>
+        <p class="text-xs text-slate-400">Scalable High-Performance Cloud Engine</p>
       </div>
       <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
         <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
@@ -29,7 +29,7 @@
       <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
         <div>
           <label class="block text-xs font-medium text-slate-400 mb-1">Server Hostname</label>
-          <input type="text" id="srvName" placeholder="e.g. node-master-01" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-100 focus:outline-none focus:border-indigo-500">
+          <input type="text" id="srvName" placeholder="e.g. prod-node-01" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-100 focus:outline-none focus:border-indigo-500">
         </div>
         <div>
           <label class="block text-xs font-medium text-slate-400 mb-1">Operating System</label>
@@ -40,7 +40,7 @@
           </select>
         </div>
         <div class="flex items-end">
-          <button onclick="deployVPS()" id="btnDeploy" class="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-medium py-2 px-4 rounded-lg text-sm transition-all duration-150 flex items-center justify-center gap-2">
+          <button onclick="deployVPS()" id="btnDeploy" class="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-medium py-2 px-4 rounded-lg text-sm transition-all duration-150 flex items-center justify-center gap-2 shadow-lg shadow-indigo-600/30">
             🚀 Launch Instance
           </button>
         </div>
@@ -51,7 +51,7 @@
     <div class="bg-slate-900 border border-slate-800 rounded-xl p-6 shadow-xl">
       <div class="flex justify-between items-center mb-4">
         <h2 class="text-lg font-semibold text-slate-200">Provisioned Instances</h2>
-        <button onclick="loadServers()" class="text-xs text-indigo-400 hover:text-indigo-300">Refresh List</button>
+        <button onclick="loadServers()" class="text-xs text-indigo-400 hover:text-indigo-300 font-medium">⟳ Refresh List</button>
       </div>
       <div class="overflow-x-auto">
         <table class="w-full text-left text-sm text-slate-300">
@@ -59,13 +59,13 @@
             <tr>
               <th class="px-4 py-3">Server</th>
               <th class="px-4 py-3">IP Address</th>
-              <th class="px-4 py-3">OS</th>
               <th class="px-4 py-3">Status</th>
-              <th class="px-4 py-3">Access Command</th>
+              <th class="px-4 py-3">Usage (CPU / RAM)</th>
+              <th class="px-4 py-3 text-right">Actions</th>
             </tr>
           </thead>
           <tbody id="serverList" class="divide-y divide-slate-800">
-            <tr><td colspan="5" class="px-4 py-4 text-center text-slate-500">Loading instances...</td></tr>
+            <tr><td colspan="5" class="px-4 py-6 text-center text-slate-500">Loading instances...</td></tr>
           </tbody>
         </table>
       </div>
@@ -74,8 +74,14 @@
   </div>
 
   <script>
-    // Connected to your live Render Backend
     const API_BASE = "https://vps-engine.onrender.com"; 
+
+    // Fake CPU/RAM generator based on ID for consistent UI metrics
+    function getMetrics(id) {
+      const cpu = ((id * 17) % 65) + 12;
+      const ram = ((id * 23) % 55) + 20;
+      return { cpu, ram };
+    }
 
     async function loadServers() {
       const tbody = document.getElementById('serverList');
@@ -83,18 +89,55 @@
         const res = await fetch(`${API_BASE}/api/servers`);
         const data = await res.json();
         if (!data.servers || data.servers.length === 0) {
-          tbody.innerHTML = '<tr><td colspan="5" class="px-4 py-4 text-center text-slate-500">No active servers yet. Deploy one above!</td></tr>';
+          tbody.innerHTML = '<tr><td colspan="5" class="px-4 py-6 text-center text-slate-500">No active servers yet. Deploy one above!</td></tr>';
           return;
         }
-        tbody.innerHTML = data.servers.map(s => `
-          <tr class="hover:bg-slate-800/40">
-            <td class="px-4 py-3 font-semibold text-white">${s.name}</td>
-            <td class="px-4 py-3 text-emerald-400 font-mono">${s.ip_address}</td>
-            <td class="px-4 py-3 text-slate-400">${s.os_name}</td>
-            <td class="px-4 py-3"><span class="px-2 py-0.5 rounded text-xs bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">${s.status}</span></td>
-            <td class="px-4 py-3 font-mono text-xs text-slate-300 bg-slate-950/40 rounded px-2 py-1 select-all">ssh root@${s.ip_address}</td>
+
+        tbody.innerHTML = data.servers.map(s => {
+          const isRunning = s.status === 'running';
+          const { cpu, ram } = isRunning ? getMetrics(s.id) : { cpu: 0, ram: 0 };
+          return `
+          <tr class="hover:bg-slate-800/40 transition-colors">
+            <td class="px-4 py-4">
+              <div class="font-semibold text-white">${s.name}</div>
+              <div class="text-xs text-slate-400">${s.os_name}</div>
+            </td>
+            <td class="px-4 py-4 font-mono text-emerald-400 text-xs select-all">${s.ip_address}</td>
+            <td class="px-4 py-4">
+              <span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                isRunning ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-amber-500/10 text-amber-400 border border-amber-500/20'
+              }">
+                <span class="w-1.5 h-1.5 rounded-full ${isRunning ? 'bg-emerald-400' : 'bg-amber-400'}"></span>
+                ${s.status}
+              </span>
+            </td>
+            <td class="px-4 py-4 w-48">
+              <div class="space-y-1.5 text-xs">
+                <div>
+                  <div class="flex justify-between text-slate-400 text-[10px] mb-0.5"><span>CPU</span><span>${cpu}%</span></div>
+                  <div class="w-full bg-slate-800 rounded-full h-1.5">
+                    <div class="bg-indigo-500 h-1.5 rounded-full" style="width: ${cpu}%"></div>
+                  </div>
+                </div>
+                <div>
+                  <div class="flex justify-between text-slate-400 text-[10px] mb-0.5"><span>RAM</span><span>${ram}%</span></div>
+                  <div class="w-full bg-slate-800 rounded-full h-1.5">
+                    <div class="bg-teal-500 h-1.5 rounded-full" style="width: ${ram}%"></div>
+                  </div>
+                </div>
+              </div>
+            </td>
+            <td class="px-4 py-4 text-right space-x-2">
+              <button onclick="toggleServer(${s.id})" class="text-xs px-2.5 py-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700">
+                ${isRunning ? 'Stop' : 'Start'}
+              </button>
+              <button onclick="deleteServer(${s.id})" class="text-xs px-2.5 py-1 rounded bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/20">
+                Terminate
+              </button>
+            </td>
           </tr>
-        `).join('');
+        `;
+        }).join('');
       } catch (err) {
         tbody.innerHTML = `<tr><td colspan="5" class="px-4 py-4 text-center text-rose-400">Failed to load servers: ${err.message}</td></tr>`;
       }
@@ -125,8 +168,26 @@
       }
     }
 
+    async function toggleServer(id) {
+      try {
+        await fetch(`${API_BASE}/api/servers/${id}/toggle`, { method: 'POST' });
+        loadServers();
+      } catch (e) {
+        alert("Action failed: " + e.message);
+      }
+    }
+
+    async function deleteServer(id) {
+      if (!confirm("Are you sure you want to terminate this server?")) return;
+      try {
+        await fetch(`${API_BASE}/api/servers/${id}`, { method: 'DELETE' });
+        loadServers();
+      } catch (e) {
+        alert("Delete failed: " + e.message);
+      }
+    }
+
     loadServers();
   </script>
 </body>
 </html>
-
